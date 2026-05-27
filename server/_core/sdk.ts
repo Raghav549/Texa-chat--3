@@ -256,38 +256,9 @@ class SDKServer {
       return buildCronUser(userInfo);
     }
 
-    const sessionUserId = session.openId;
-    const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
-
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
-
-    return user;
+    // TEXA: OAuth disabled - return null to use phone-based auth
+    console.log("[Auth] OAuth authentication disabled for TEXA");
+    return null as any;
   }
 }
 
@@ -301,16 +272,31 @@ export type AuthenticatedUser = User & {
 
 function buildCronUser(userInfo: GetUserInfoWithJwtResponse): AuthenticatedUser {
   const now = new Date();
+  // TEXA: Return minimal cron user object
   return {
     id: -1,
-    openId: userInfo.openId,
-    name: userInfo.name || "Manus Scheduled Task",
+    phone: "cron",
+    username: "cron-task",
     email: null,
-    loginMethod: null,
+    avatar: null,
+    bio: null,
+    status: null,
     role: "user",
+    publicKey: "",
+    publicKeyVersion: 1,
+    encryptedPrivateKey: null,
+    signingPublicKey: "",
+    signingPrivateKeyEncrypted: null,
+    isPhoneVerified: true,
+    isBiometricEnabled: false,
+    is2FAEnabled: false,
+    hideOnlineStatus: false,
+    hideReadReceipts: false,
+    hideProfilePhoto: false,
+    lastSeen: now,
+    isOnline: false,
     createdAt: now,
     updatedAt: now,
-    lastSignedIn: now,
     taskUid: userInfo.taskUid ?? undefined,
     isCron: true,
   } as AuthenticatedUser;
