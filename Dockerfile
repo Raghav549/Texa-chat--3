@@ -1,4 +1,4 @@
-# TEXA Backend Dockerfile
+# TEXA Backend Dockerfile - Optimized for Render
 # Multi-stage build for production deployment
 
 # Stage 1: Build
@@ -6,26 +6,34 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Install pnpm globally
+RUN npm install -g pnpm@9.12.0
+
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# Install all dependencies (including dev) for build
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build backend
-RUN npm run build
+RUN pnpm run build
 
-# Stage 2: Production
+# Stage 2: Production Runtime
 FROM node:22-alpine
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install pnpm globally
+RUN npm install -g pnpm@9.12.0
+
+# Copy package files
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile --prod
+
+# Install only production dependencies
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
@@ -36,7 +44,7 @@ USER nodejs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
 
 # Expose port
 EXPOSE 3000
