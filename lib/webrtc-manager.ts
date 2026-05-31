@@ -1,9 +1,8 @@
 /**
  * TEXA WebRTC Peer Connection Manager
  * Handles voice and video calling with peer connections, ICE candidates, and call management
+ * Compatible with React Native (no EventEmitter dependency)
  */
-
-import { EventEmitter } from "events";
 
 export interface RTCConfig {
   iceServers: RTCIceServer[];
@@ -42,16 +41,17 @@ export interface CallStats {
   jitter: number;
 }
 
-export class WebRTCManager extends EventEmitter {
+type EventCallback = (data: any) => void;
+
+export class WebRTCManager {
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private callStates: Map<string, CallState> = new Map();
   private localStream: MediaStream | null = null;
   private config: RTCConfig;
   private statsInterval: any = null;
+  private eventListeners: Map<string, EventCallback[]> = new Map();
 
   constructor(config?: Partial<RTCConfig>) {
-    super();
-
     this.config = {
       iceServers: [
         { urls: ["stun:stun.l.google.com:19302"] },
@@ -64,6 +64,40 @@ export class WebRTCManager extends EventEmitter {
       rtcpMuxPolicy: "require",
       ...config,
     };
+  }
+
+  /**
+   * Event listener management
+   */
+  on(event: string, callback: EventCallback): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(callback);
+  }
+
+  off(event: string, callback: EventCallback): void {
+    if (!this.eventListeners.has(event)) return;
+
+    const callbacks = this.eventListeners.get(event)!;
+    const index = callbacks.indexOf(callback);
+
+    if (index > -1) {
+      callbacks.splice(index, 1);
+    }
+  }
+
+  private emit(event: string, data?: any): void {
+    if (!this.eventListeners.has(event)) return;
+
+    const callbacks = this.eventListeners.get(event)!;
+    callbacks.forEach((callback) => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`Error in ${event} listener:`, error);
+      }
+    });
   }
 
   /**
@@ -480,7 +514,7 @@ export class WebRTCManager extends EventEmitter {
       let latency = 0;
       let jitter = 0;
 
-      stats.forEach((report) => {
+      stats.forEach((report: any) => {
         if (report.type === "inboundRtp") {
           if (report.mediaType === "audio") {
             audioCodec = report.codecId || "unknown";
@@ -577,6 +611,7 @@ export class WebRTCManager extends EventEmitter {
 
     this.peerConnections.clear();
     this.callStates.clear();
+    this.eventListeners.clear();
 
     this.emit("cleanup");
   }
